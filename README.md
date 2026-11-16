@@ -12,7 +12,6 @@
 [![GlassDock 미리보기](assets/preview.webp)](https://github.com/Mojjiman/GlassDock/releases/download/v0.1.0/GlassDock-intro.mp4)
 
 <p align="center">▶ 그림을 누르면 1분 2초짜리 전체 소개 영상(1080p 60fps, 소리 포함)이 열려요.</p>
-https://github.com/user-attachments/assets/2e255bcc-6a10-4909-8ead-7a4ef4696b26
 
 https://github.com/user-attachments/assets/ae9ba084-0107-4e61-8cb3-32cbeecd137f
 
