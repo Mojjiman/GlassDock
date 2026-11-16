@@ -8,9 +8,9 @@
   <a href="https://github.com/Mojjiman/GlassDock/releases/latest"><b>⬇ 다운로드 (최신 버전)</b></a>
 </p>
 
-[![소개 영상 보기](assets/poster.jpg)](https://github.com/Mojjiman/GlassDock/releases/download/v0.1.0/GlassDock-intro.mp4)
+[![GlassDock 미리보기](assets/preview.webp)](https://github.com/Mojjiman/GlassDock/releases/download/v0.1.0/GlassDock-intro.mp4)
 
-<p align="center">▶ 위 그림을 누르면 1분 2초짜리 소개 영상(1080p 60fps, 소리 포함)이 열려요.</p>
+<p align="center">▶ 그림을 누르면 1분 2초짜리 전체 소개 영상(1080p 60fps, 소리 포함)이 열려요.</p>
 
 GlassDock은 Windows 11의 작업 표시줄을 숨기고, 그 자리에 뒤 배경이 유리처럼 비치는 도크를 띄우는 프로그램이에요.
 
