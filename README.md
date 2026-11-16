@@ -56,6 +56,21 @@ GlassDock은 Windows 11의 작업 표시줄을 숨기고, 그 자리에 뒤 배�
 - **끄기:** 도크 빈 곳을 오른쪽 클릭 → [GlassDock 설정] → 맨 아래 [GlassDock 종료]를 누르면 원래 작업 표시줄이 돌아와요.
 - **작업 표시줄이 안 돌아올 때:** 보통은 자동으로 복구돼요. 그래도 안 되면 GlassDock이 있는 폴더에서 `GlassDock.exe --restore-taskbar`를 실행하거나, 로그아웃했다가 다시 로그인해요.
 
----
+## 소스코드로 직접 고치기
 
-이 저장소는 배포용이라 실행 파일과 소개 자료만 올려요.
+이 저장소에 소스코드도 같이 있어요. C#·WPF(.NET 10)로 만들었어요.
+
+- **필요한 것:** Windows 11, [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) x64 (10.0.404 이상)
+- **설계 문서:** [`docs/design.md`](docs/design.md)(영어)에 구조와 동작이 정리돼 있어요. Claude 같은 AI한테 고쳐 달라고 할 때 이 문서를 먼저 읽게 하면 좋아요.
+- **먼저 끄기:** GlassDock은 한 번에 하나만 켜져요. 고친 걸 실행하기 전에 쓰던 GlassDock을 꺼 주세요.
+
+```powershell
+# 빌드 (src\GlassDock\bin\Debug\net10.0-windows10.0.22621.0\GlassDock.exe 가 생겨요)
+dotnet build src/GlassDock -c Debug
+
+# 다른 PC에 줄 exe 하나짜리 zip 만들기 (artifacts\ 에 생겨요)
+powershell -File build\publish.ps1 -DotnetRoot "C:\Program Files\dotnet"
+```
+
+- `build\` 안의 스크립트는 .NET이 `C:\GimojjiMan\Devs\dotnet`에 있다고 보고 만들어져 있어요. SDK를 보통대로 설치했다면 위처럼 `-DotnetRoot "C:\Program Files\dotnet"`을 붙여 주세요.
+- `publish.ps1`로 만든 exe도 여기 새 버전이 올라오면 업데이트 알림이 떠요. 업데이트하면 직접 고친 내용이 사라지니, 원하지 않으면 설정 → 일반에서 **업데이트 자동 확인**을 꺼 두세요.

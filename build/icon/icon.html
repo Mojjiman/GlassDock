@@ -1,0 +1,71 @@
+<!doctype html>
+<!-- Source of GlassDock.ico. build/icon/make-icon.mjs renders this page at each icon size (?s=N) in headless Edge
+     and packs the PNGs into src/GlassDock/GlassDock.ico. Sizes up to 32 px get a simpler drawing that stays legible. -->
+<meta charset="utf-8">
+<style>html, body { margin: 0; background: transparent; overflow: hidden; } svg { display: block; }</style>
+<body>
+<script>
+const s = Number(new URLSearchParams(location.search).get("s")) || 256;
+const small = s <= 32;
+
+const defs = `
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#1c3a8f"/><stop offset="0.5" stop-color="#3a2384"/><stop offset="1" stop-color="#0a1030"/>
+  </linearGradient>
+  <radialGradient id="glow" cx="0.28" cy="0.3" r="0.75">
+    <stop offset="0" stop-color="#63e6d5" stop-opacity="0.55"/><stop offset="1" stop-color="#63e6d5" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ffffff" stop-opacity="0.42"/><stop offset="1" stop-color="#ffffff" stop-opacity="0.14"/>
+  </linearGradient>
+  <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ffffff" stop-opacity="0.95"/><stop offset="1" stop-color="#ffffff" stop-opacity="0.25"/>
+  </linearGradient>
+  <linearGradient id="a1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6ff5df"/><stop offset="1" stop-color="#2e8bff"/></linearGradient>
+  <linearGradient id="a2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffa062"/><stop offset="1" stop-color="#ff3f78"/></linearGradient>
+  <linearGradient id="a3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd36a"/><stop offset="1" stop-color="#f2961c"/></linearGradient>
+  <filter id="blur" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="9"/></filter>
+  <clipPath id="tile"><rect x="12" y="12" width="232" height="232" rx="58"/></clipPath>
+  <clipPath id="pill"><rect x="38" y="158" width="180" height="60" rx="30"/></clipPath>`;
+
+// Aurora bands; drawn again inside the pill, lifted and stretched, so the glass reads as a lens.
+const bands = (blur) => `
+  <path d="M-30 118 C 50 64, 150 158, 290 84" stroke="#63e6d5" stroke-width="30" fill="none" opacity="0.6" ${blur}/>
+  <path d="M-30 168 C 70 122, 168 196, 290 134" stroke="#8a63ff" stroke-width="28" fill="none" opacity="0.55" ${blur}/>
+  <path d="M-30 210 C 60 186, 170 232, 290 196" stroke="#ff7ab8" stroke-width="18" fill="none" opacity="0.35" ${blur}/>`;
+
+const stars = [[60, 54, 2.6], [176, 44, 2], [206, 92, 2.8], [96, 104, 1.8], [146, 70, 1.6], [222, 140, 1.8]]
+  .map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="#fff" opacity="0.85"/>`).join("");
+
+const apps = [["a1", 60], ["a2", 113], ["a3", 166]]
+  .map(([g, x]) => `<rect x="${x}" y="172" width="32" height="32" rx="9" fill="url(#${g})"/>`).join("");
+
+const big = `
+  <rect x="12" y="12" width="232" height="232" rx="58" fill="url(#bg)"/>
+  <g clip-path="url(#tile)">
+    <rect width="256" height="256" fill="url(#glow)"/>
+    ${bands('filter="url(#blur)"')}
+    ${stars}
+  </g>
+  <rect x="12.75" y="12.75" width="230.5" height="230.5" rx="57.25" fill="none" stroke="#fff" stroke-opacity="0.16" stroke-width="1.5"/>
+  <g clip-path="url(#pill)">
+    <g transform="translate(128 188) scale(1.35 1.6) translate(-128 -150)">${bands('filter="url(#blur)"')}</g>
+    <rect x="38" y="158" width="180" height="60" fill="url(#glass)"/>
+    <ellipse cx="128" cy="160" rx="84" ry="14" fill="#fff" opacity="0.28"/>
+  </g>
+  <rect x="39.5" y="159.5" width="177" height="57" rx="28.5" fill="none" stroke="url(#rim)" stroke-width="3"/>
+  ${apps}`;
+
+// Small sizes: no blur or stars, a brighter pill and bigger app dots.
+const tiny = `
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#bg)"/>
+  <g clip-path="url(#tile)"><rect width="256" height="256" fill="url(#glow)"/>
+    <path d="M-30 110 C 60 50, 160 150, 290 70" stroke="#63e6d5" stroke-width="40" fill="none" opacity="0.55"/></g>
+  <rect x="28" y="140" width="200" height="84" rx="42" fill="#fff" fill-opacity="0.32" stroke="#fff" stroke-opacity="0.9" stroke-width="8"/>
+  <rect x="56" y="160" width="44" height="44" rx="12" fill="url(#a1)"/>
+  <rect x="106" y="160" width="44" height="44" rx="12" fill="url(#a2)"/>
+  <rect x="156" y="160" width="44" height="44" rx="12" fill="url(#a3)"/>`;
+
+document.body.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="${s}" height="${s}"><defs>${defs}</defs>${small ? tiny : big}</svg>`;
+</script>
+</body>

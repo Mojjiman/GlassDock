@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/GlassDock/GlassDock.csproj" />
+  </Folder>
+</Solution>
