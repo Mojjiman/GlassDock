@@ -16,6 +16,12 @@ public static class AppPaths
 
     public static string ExePath => Environment.ProcessPath ?? throw new InvalidOperationException("Process path unknown");
 
+    /// <summary>
+    /// A single-file publish has no assembly path on disk. A Debug build is an apphost plus GlassDock.dll
+    /// that only runs with the side-by-side SDK's DOTNET_ROOT, which a sign-in launch does not have.
+    /// </summary>
+    public static bool IsSingleFile { get; } = string.IsNullOrEmpty(typeof(AppPaths).Assembly.Location);
+
     public static void EnsureCreated()
     {
         Directory.CreateDirectory(Root);

@@ -40,13 +40,13 @@ public static class WidgetRegistry
 {
     public static IReadOnlyList<WidgetDescriptor> All { get; } =
     [
-        new("media", "지금 재생 중", "재생 중인 음악·영상과 재생 컨트롤, 클릭하면 크게 보기와 앱 볼륨", () => new MediaWidget()),
-        new("volume", "볼륨", "클릭하면 볼륨 창, 휠로 볼륨 조절", () => new VolumeWidget()),
-        new("cpu", "CPU", "CPU 사용률", () => new CpuWidget()),
-        new("memory", "메모리", "메모리 사용률", () => new MemoryWidget()),
-        new("network", "네트워크", "다운로드·업로드 속도", () => new NetworkWidget()),
-        new("ai", "AI 사용량", "Claude·Codex 사용 한도와 Claude Code 토큰", () => new AiUsageWidget()),
-        new("battery", "배터리", "배터리 잔량과 충전 상태", () => new BatteryWidget()) { IsAvailable = BatteryWidget.HasBattery },
+        new("media", "지금 재생 중", "재생 중인 음악·영상을 보여 주고 바로 넘길 수 있어요. 누르면 크게 보이고 앱별 소리도 맞춰요.", () => new MediaWidget()),
+        new("volume", "볼륨", "소리 크기를 보여 줘요. 누르면 조절 창이 열리고, 휠을 굴려도 바뀌어요.", () => new VolumeWidget()),
+        new("cpu", "CPU", "컴퓨터가 얼마나 바쁜지 %로 보여 줘요.", () => new CpuWidget()),
+        new("memory", "메모리", "메모리(RAM)를 얼마나 쓰고 있는지 보여 줘요.", () => new MemoryWidget()),
+        new("network", "인터넷 속도", "지금 내려받고 올리는 속도를 보여 줘요.", () => new NetworkWidget()),
+        new("ai", "AI 사용량", "Claude·ChatGPT(Codex)의 5시간·주간 사용 한도를 보여 줘요. 하나만 쓰면 그것만 보여요.", () => new AiUsageWidget()),
+        new("battery", "배터리", "남은 배터리와 충전 중인지 보여 줘요.", () => new BatteryWidget()) { IsAvailable = BatteryWidget.HasBattery },
     ];
 
     public static WidgetDescriptor? Find(string type) => All.FirstOrDefault(d => d.Type == type);

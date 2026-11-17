@@ -20,6 +20,7 @@ public static class TaskbarRestorer
                     Log.Win32Failure($"SetWindowPos(SHOW, {cls})");
             }
         }
+        ExplorerTaskbars.RestoreTaskbandProp();
         ExplorerTaskbars.SetAppBarState(journal.OriginalAppBarState);
         int now = ExplorerTaskbars.GetAppBarState();
         if (now != journal.OriginalAppBarState)

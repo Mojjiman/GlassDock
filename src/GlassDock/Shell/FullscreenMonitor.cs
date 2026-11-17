@@ -31,6 +31,11 @@ public sealed class FullscreenMonitor : IDisposable
     public bool IsFullscreen => _state;
     /// <summary>Start or search is the foreground window.</summary>
     public bool LauncherOpen { get; private set; }
+    /// <summary>Our own UI in use (a press on the dock, an open flyout): keep the dock over the game.</summary>
+    public Func<bool>? HoldShown { get; set; }
+
+    /// <summary>Re-evaluates now, e.g. once what <see cref="HoldShown"/> reports has ended.</summary>
+    public void Recheck() => Kick();
 
     public FullscreenMonitor(FullScreenHelper helper)
     {
@@ -43,13 +48,21 @@ public sealed class FullscreenMonitor : IDisposable
         if (_foregroundHook == 0) Log.Warn("SetWinEventHook(EVENT_SYSTEM_FOREGROUND) failed; Start will not bring the dock over fullscreen games");
     }
 
+    /// <summary>Whether the window belongs to Start or search.</summary>
+    public static bool IsLauncher(nint hwnd) =>
+        hwnd != 0 && GetProcessPath(GetWindowProcessId(hwnd)) is { } path
+        && AppConstants.Fullscreen.LauncherProcesses.Contains(Path.GetFileName(path), StringComparer.OrdinalIgnoreCase);
+
     private void OnForeground(nint hook, uint evt, nint hwnd, int idObject, int idChild, uint thread, uint time)
     {
-        bool launcher = hwnd != 0 && GetProcessPath(GetWindowProcessId(hwnd)) is { } path
-            && AppConstants.Fullscreen.LauncherProcesses.Contains(Path.GetFileName(path), StringComparer.OrdinalIgnoreCase);
-        if (launcher == LauncherOpen) return;
-        LauncherOpen = launcher;
-        Log.Debug($"Launcher {(launcher ? "opened" : "closed")}");
+        bool launcher = IsLauncher(hwnd);
+        if (launcher != LauncherOpen)
+        {
+            LauncherOpen = launcher;
+            Log.Debug($"Launcher {(launcher ? "opened" : "closed")}");
+        }
+        // Every change: the game coming back from one of our popups changes no fullscreen list
+        // (ManagedShell keeps a fullscreen app active while a topmost window is in front).
         Kick();
     }
 
@@ -103,6 +116,13 @@ public sealed class FullscreenMonitor : IDisposable
         {
             any = false;
             reason = "(Start or search open)";
+        }
+        else if (any && (GetWindowProcessId(GetForegroundWindow()) == (uint)Environment.ProcessId || HoldShown?.Invoke() == true))
+        {
+            // Opened from Start: Start closes and the game comes back for a moment before our popup
+            // takes the foreground; keep the dock with it.
+            any = false;
+            reason = "(dock in use)";
         }
 
         if (any == _state) return;

@@ -82,7 +82,7 @@ public sealed class AiUsageFlyout : FlyoutWindow
         var s = AiUsageTracker.Shared.Snapshot;
         _updated.Text = $"{DateTime.Now:HH:mm} 기준";
         // Rebuild only when which windows exist changes; otherwise update in place.
-        string shape = $"{s.ClaudeSession != null}{s.ClaudeWeek != null}{s.ClaudeNote}|{s.CodexSession != null}{s.CodexWeek != null}";
+        string shape = $"{s.Services}|{s.ClaudeSession != null}{s.ClaudeWeek != null}{s.ClaudeNote}|{s.CodexSession != null}{s.CodexWeek != null}";
         bool fresh = shape != _shape;
         if (fresh)
         {
@@ -96,11 +96,22 @@ public sealed class AiUsageFlyout : FlyoutWindow
 
     private void Build(AiUsageSnapshot s)
     {
+        // Someone who uses only one of the two gets only its card; neither found yet shows both, as hints.
+        bool showClaude = s.Services != AiServices.Codex, showCodex = s.Services != AiServices.Claude;
+        if (showClaude) BuildClaude(s);
+        if (showCodex) BuildCodex(s);
+    }
+
+    private void BuildClaude(AiUsageSnapshot s)
+    {
         var claude = Card("Claude", AppConstants.AiUsage.ClaudeAppId, AppConstants.AiUsage.ClaudeUsagePage);
         Gauges(claude, s, ("5시간", x => x.ClaudeSession), ("주간", x => x.ClaudeWeek));
         if (s.ClaudeNote != null) claude.Children.Add(Note(s.ClaudeNote));
         claude.Children.Add(Chip(x => $"Claude Code 토큰   5시간 {AiUsageFormat.Tokens(x.ClaudeTokensSession)}   ·   오늘 {AiUsageFormat.Tokens(x.ClaudeTokensToday)}"));
+    }
 
+    private void BuildCodex(AiUsageSnapshot s)
+    {
         var gpt = Card("ChatGPT", AppConstants.AiUsage.CodexAppId, AppConstants.AiUsage.CodexUsagePage);
         Gauges(gpt, s, ("5시간", x => x.CodexSession), ("주간", x => x.CodexWeek));
         gpt.Children.Add(Chip(x => x.CodexSeen is { } seen ? $"Codex 기준   ·   마지막 사용 {seen.ToLocalTime():M/d HH:mm}" : "Codex 사용 기록이 없습니다"));

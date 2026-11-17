@@ -193,14 +193,21 @@ public sealed class MediaWidget : IWidget
         await RefreshAsync();
     }
 
-    private async Task RefreshAsync()
+    // Newer refreshes win: two for the same session (title, then art changed) can finish out of order.
+    private int _refreshGeneration;
+
+    private const int ErrorNotReady = unchecked((int)0x80070015);
+
+    private async Task RefreshAsync(int attempt = 0)
     {
         var session = _session;
         if (session == null) return;
+        int generation = ++_refreshGeneration;
+        bool Stale() => _disposed || session != _session || generation != _refreshGeneration;
         try
         {
             var props = await session.TryGetMediaPropertiesAsync();
-            if (_disposed || session != _session) return;
+            if (Stale()) return;
             _titleText = props.Title ?? "";
             _artistText = string.IsNullOrEmpty(props.Artist) ? props.AlbumArtist ?? "" : props.Artist;
             Thumbnail = props.Thumbnail;
@@ -209,8 +216,15 @@ public sealed class MediaWidget : IWidget
             _controls.Visibility = Visibility.Visible;
             ShowPlayback();
             var art = props.Thumbnail == null ? null : await LoadArtAsync(props.Thumbnail, AppConstants.Widgets.MediaArtPx);
-            if (_disposed || session != _session) return;
+            if (Stale()) return;
             ShowArt(art);
+        }
+        catch (System.Runtime.InteropServices.COMException ex) when (ex.HResult == ErrorNotReady && attempt < AppConstants.Widgets.MediaReadRetries)
+        {
+            // Spotify answers "not ready" while it switches tracks; the old title and art stayed until the next event.
+            Log.Debug($"Media properties not ready (attempt {attempt + 1}); retrying");
+            await Task.Delay(AppConstants.Widgets.MediaReadRetryMs);
+            if (!Stale()) await RefreshAsync(attempt + 1);
         }
         catch (Exception ex) { Log.Warn("Could not read media properties", ex); }
     }

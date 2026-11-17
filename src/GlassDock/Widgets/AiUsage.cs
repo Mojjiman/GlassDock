@@ -20,7 +20,12 @@ public sealed record LimitWindow(double UsedPercent, DateTimeOffset? ResetsAt)
 public sealed record AiUsageSnapshot(
     LimitWindow? ClaudeSession, LimitWindow? ClaudeWeek, string? ClaudeNote,
     long ClaudeTokensSession, long ClaudeTokensToday,
-    LimitWindow? CodexSession, LimitWindow? CodexWeek, DateTimeOffset? CodexSeen);
+    LimitWindow? CodexSession, LimitWindow? CodexWeek, DateTimeOffset? CodexSeen,
+    AiServices Services);
+
+/// <summary>Which AI tools this PC has used (their local data exists).</summary>
+[Flags]
+public enum AiServices { None = 0, Claude = 1, Codex = 2, Both = Claude | Codex }
 
 /// <summary>
 /// Reads AI usage for every AI widget tile (one shared instance, since tiles are rebuilt with the dock):
@@ -91,9 +96,23 @@ public sealed class AiUsageTracker
 
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMilliseconds(AppConstants.AiUsage.HttpTimeoutMs) };
     private static readonly string Home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    // Both CLIs let the user move their data folder with these variables.
+    private static string ClaudeDir => Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR") is { Length: > 0 } d ? d : Path.Combine(Home, ".claude");
+    private static string CodexDir => Environment.GetEnvironmentVariable("CODEX_HOME") is { Length: > 0 } d ? d : Path.Combine(Home, ".codex");
+    private static string ClaudeCredentials => Path.Combine(ClaudeDir, ".credentials.json");
+    private static string ClaudeProjects => Path.Combine(ClaudeDir, "projects");
+    private static string CodexSessions => Path.Combine(CodexDir, "sessions");
+
+    /// <summary>
+    /// Which tools have local data: Claude Code's login or transcripts, Codex's session logs. Someone who
+    /// uses only one gets that one's 5-hour and weekly limits instead of a row for each.
+    /// </summary>
+    public static AiServices Detect() =>
+        (File.Exists(ClaudeCredentials) || Directory.Exists(ClaudeProjects) ? AiServices.Claude : AiServices.None)
+        | (Directory.Exists(CodexSessions) ? AiServices.Codex : AiServices.None);
 
     private readonly object _refreshGate = new();
-    private volatile AiUsageSnapshot _snapshot = new(null, null, null, 0, 0, null, null, null);
+    private volatile AiUsageSnapshot _snapshot = new(null, null, null, 0, 0, null, null, null, Detect());
     private DateTime _nextTranscripts, _nextClaude, _nextCodex;
 
     public AiUsageSnapshot Snapshot => _snapshot;
@@ -117,7 +136,7 @@ public sealed class AiUsageTracker
                 _nextCodex = now.AddMilliseconds(AppConstants.AiUsage.CodexScanMs);
             }
             _snapshot = new AiUsageSnapshot(_claudeSession, _claudeWeek, _claudeNote, _tokensSession, _tokensToday,
-                _codexSession, _codexWeek, _codexSeen);
+                _codexSession, _codexWeek, _codexSeen, Detect());
         }
     }
 
@@ -131,7 +150,7 @@ public sealed class AiUsageTracker
     private void FetchClaudeLimits()
     {
         _nextClaude = DateTime.UtcNow.AddMilliseconds(AppConstants.AiUsage.ClaudeLimitsPollMs);
-        var path = Path.Combine(Home, ".claude", ".credentials.json");
+        var path = ClaudeCredentials;
         try
         {
             if (!File.Exists(path)) { _claudeNote = "한도: 터미널에서 claude 로그인 필요"; return; }
@@ -210,7 +229,7 @@ public sealed class AiUsageTracker
 
     private void ScanTranscripts()
     {
-        var root = Path.Combine(Home, ".claude", "projects");
+        var root = ClaudeProjects;
         var now = DateTimeOffset.Now;
         var today = new DateTimeOffset(DateTime.Today);
         var rolling = now.AddHours(-AppConstants.AiUsage.ClaudeSessionHours);
@@ -303,8 +322,7 @@ public sealed class AiUsageTracker
 
     private void ReadCodex()
     {
-        var home = Environment.GetEnvironmentVariable("CODEX_HOME") is { Length: > 0 } h ? h : Path.Combine(Home, ".codex");
-        var dir = Path.Combine(home, "sessions");
+        var dir = CodexSessions;
         try
         {
             if (!Directory.Exists(dir)) return;

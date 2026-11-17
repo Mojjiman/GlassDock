@@ -47,9 +47,23 @@ public static class AppConstants
         public const int WindowSeconds = 60;
     }
 
+    /// <summary>
+    /// Exceptions on the UI thread after startup that are logged and survived. More than this many within the
+    /// window means the dock is stuck in a failing state, and a restart (crash path, watchdog) is the way out.
+    /// </summary>
+    public static class UiFaults
+    {
+        public const int MaxSurvived = 3;
+        public const int WindowSeconds = 60;
+    }
+
     public static class Settings
     {
         public const int SaveDebounceMs = 500;
+        /// <summary>A settings card whose setting has no effect right now (its parent setting is off).</summary>
+        public const double DisabledCardOpacity = 0.45;
+        /// <summary>Days of logs the problem report collects.</summary>
+        public const int ReportLogDays = 3;
     }
 
     public static class Input
@@ -69,7 +83,11 @@ public static class AppConstants
         /// </summary>
         public static readonly int[] PrivateKeyCandidates =
             [.. Enumerable.Range(0x7C, 12), .. Enumerable.Range(0x97, 9), .. Enumerable.Range(0x88, 8)];
-        public const int ActivateConfirmMs = 50;
+        /// <summary>How long each activation step gets to take effect before a stronger one is tried.</summary>
+        public const int ActivateStepMs = 200;
+        /// <summary>The last step's wait; a fullscreen game restoring its display mode can take this long.</summary>
+        public const int ActivateGiveUpMs = 1000;
+        public const int ActivatePollMs = 10;
         public const uint WinStaleCheckMs = 2000;
         /// <summary>Longest wait for our injected key to come back through the hook before held-back key-ups are released anyway.</summary>
         public const int EchoTimeoutMs = 300;
@@ -241,6 +259,10 @@ public static class AppConstants
         /// taskbar does when Win is pressed in a game.
         /// </summary>
         public static readonly string[] LauncherProcesses = ["StartMenuExperienceHost.exe", "SearchHost.exe"];
+        /// <summary>Longest wait for Start or search to give up the foreground after our Esc.</summary>
+        public const int LauncherCloseWaitMs = 500;
+        /// <summary>How often a flyout opened over a closing Start checks whether it can take the foreground.</summary>
+        public const int LauncherPollMs = 10;
     }
 
     public static class Widgets
@@ -256,6 +278,8 @@ public static class AppConstants
         /// <summary>Width of the now-playing title column, in icon sizes; fixed so track changes do not resize the dock.</summary>
         public const double MediaTextWidthIcons = 2.8;
         public const int MediaArtPx = 96;
+        public const int MediaReadRetries = 3;
+        public const int MediaReadRetryMs = 300;
 
         public const double VolumeFlyoutWidth = 320;
         public const double VolumeSliderBarDip = 32;

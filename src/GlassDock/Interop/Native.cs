@@ -285,6 +285,26 @@ public static unsafe class Native
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool EnumWindows(EnumWindowsProc proc, nint lParam);
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool EnumChildWindows(nint parent, EnumWindowsProc proc, nint lParam);
+
+    // ---- window properties --------------------------------------------------------------------
+    /// <summary>On <c>Shell_TrayWnd</c>: the window that <c>ITaskbarList</c> sends AddTab/DeleteTab and the rest to.</summary>
+    public const string TaskbandProp = "TaskbandHWND";
+    /// <summary>Explorer's task band, the default <see cref="TaskbandProp"/> target.</summary>
+    public const string TaskbandClass = "MSTaskSwWClass";
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern nint GetProp(nint hwnd, string name);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetProp(nint hwnd, string name, nint data);
+
+    [DllImport("user32.dll")]
+    public static extern nint SendMessage(nint hwnd, int msg, nint wParam, nint lParam);
+
     // ---- window class / creation --------------------------------------------------------------
     public delegate nint WndProc(nint hwnd, int msg, nuint wParam, nint lParam);
 
@@ -374,6 +394,7 @@ public static unsafe class Native
     public const uint KEYEVENTF_EXTENDEDKEY = 0x1;
     public const uint KEYEVENTF_KEYUP = 0x2;
     public const int VK_LBUTTON = 0x01, VK_RBUTTON = 0x02, VK_MBUTTON = 0x04;
+    public const int VK_ESCAPE = 0x1B;
     public const int VK_SHIFT = 0x10, VK_CONTROL = 0x11, VK_MENU = 0x12, VK_LWIN = 0x5B, VK_RWIN = 0x5C;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -575,6 +596,7 @@ public static unsafe class Native
     public const uint SYNCHRONIZE = 0x00100000;
     public const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
     public const uint INFINITE = 0xFFFFFFFF;
+    public const uint WAIT_OBJECT_0 = 0;
 
     [DllImport("kernel32.dll", SetLastError = true)]
     public static extern nint OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint pid);
@@ -696,11 +718,18 @@ public static unsafe class Native
     }
 
     /// <summary>Process creation time as UTC FILETIME ticks, or null if the process is gone.</summary>
+    /// <summary>Creation time of a running process, or null once it has exited.</summary>
     public static long? GetProcessStartFileTime(uint pid)
     {
-        nint h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        nint h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, false, pid);
         if (h == 0) return null;
-        try { return GetProcessTimes(h, out long c, out _, out _, out _) ? c : null; }
+        try
+        {
+            // An exited process can still be opened while anyone holds a handle to it (the watchdog's own
+            // wait, a task manager), and its times stay readable, so a dead dock looked alive.
+            if (WaitForSingleObject(h, 0) == WAIT_OBJECT_0) return null;
+            return GetProcessTimes(h, out long c, out _, out _, out _) ? c : null;
+        }
         finally { CloseHandle(h); }
     }
 
