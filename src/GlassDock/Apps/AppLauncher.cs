@@ -8,6 +8,37 @@ namespace GlassDock.Apps;
 
 public static class AppLauncher
 {
+    // ShellExecuteEx waits for .lnk resolution, packaged-app activation, a virus scan or a sleeping disk, and for
+    // the whole UAC prompt with "runas"; on the UI thread that froze the dock. One STA thread keeps launches in order.
+    private static readonly System.Collections.Concurrent.BlockingCollection<(Func<bool> Work, TaskCompletionSource<bool> Done)> Queue = new();
+
+    static AppLauncher()
+    {
+        var thread = new Thread(() =>
+        {
+            foreach (var (work, done) in Queue.GetConsumingEnumerable())
+            {
+                try { done.SetResult(work()); }
+                catch (Exception ex)
+                {
+                    Log.Error("Launch failed", ex);
+                    done.SetResult(false);
+                }
+            }
+        }) { IsBackground = true, Name = "GlassDock.Launcher" };
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+    }
+
+    /// <summary>Runs <paramref name="work"/> (one of the launch methods here) on the launcher thread.</summary>
+    /// <returns>Its result; continuations run back on the caller's thread when awaited there.</returns>
+    public static Task<bool> InBackground(Func<bool> work)
+    {
+        var done = new TaskCompletionSource<bool>();
+        Queue.Add((work, done));
+        return done.Task;
+    }
+
     public static bool Launch(PinnedItem pin, bool elevated = false)
     {
         if (pin.Kind == "folder" && pin.Path != null) return Execute(pin.Path, null, null, null);

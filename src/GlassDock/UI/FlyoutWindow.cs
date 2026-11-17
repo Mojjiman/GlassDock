@@ -7,6 +7,8 @@ using System.Windows.Media;
 using System.Windows.Shell;
 using GlassDock.Config;
 using GlassDock.Glass;
+using GlassDock.Input;
+using GlassDock.Logging;
 using GlassDock.Shell;
 using static GlassDock.Interop.Native;
 using F = GlassDock.Config.AppConstants.Flyouts;
@@ -224,9 +226,15 @@ public class FlyoutWindow : Window
     public void ShowAt(RECT anchor)
     {
         _anchor = anchor;
+        // Start or search in front (Win, then a click on the dock) would stay on top of the flyout and
+        // refuses to give up the foreground. The press on the dock already sent it Esc; if it is still
+        // fading out, the flyout shows now and takes the foreground once Start lets go.
+        bool launcher = ForegroundActivator.DismissLauncher();
         Dock.TakeForeground();
         Show();
         Activate();
+        if (launcher) ForegroundActivator.ActivateOnceLauncherGone(Hwnd, "flyout", () => _closing);
+        else if (GetForegroundWindow() != Hwnd) ForegroundActivator.Activate(Hwnd);
         Reposition();
         SizeChanged += (_, _) => Reposition();
     }

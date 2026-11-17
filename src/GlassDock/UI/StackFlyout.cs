@@ -129,10 +129,17 @@ public sealed class StackFlyout : FlyoutWindow
             if (_pressed != e) return;
             _pressed = null;
             SafeClose();
-            AppLauncher.Execute(e.Path, null, Folder, null);
+            Open(e.Path);
         };
         cell.MouseRightButtonUp += (_, ev) => { ev.Handled = true; ShowEntryMenu(cell, e); };
         return cell;
+    }
+
+    /// <summary>Opening a file waits for its app's association handler; off the UI thread so the dock stays live.</summary>
+    private void Open(string path)
+    {
+        string folder = Folder;
+        _ = AppLauncher.InBackground(() => AppLauncher.Execute(path, null, folder, null));
     }
 
     private async Task SetIconAsync(Image img, string path, int px)
@@ -157,7 +164,7 @@ public sealed class StackFlyout : FlyoutWindow
     private void ShowEntryMenu(IconCell cell, FolderEntry e)
     {
         var menu = new ContextMenu { PlacementTarget = cell };
-        Add(menu, "열기", () => { SafeClose(); AppLauncher.Execute(e.Path, null, Folder, null); });
+        Add(menu, "열기", () => { SafeClose(); Open(e.Path); });
         Add(menu, "파일 위치 열기", () => { SafeClose(); AppLauncher.OpenFileLocation(e.Path); });
         Add(menu, "경로 복사", () =>
         {

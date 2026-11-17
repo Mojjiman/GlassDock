@@ -11,12 +11,16 @@ namespace GlassDock.Widgets;
 /// <summary>
 /// Claude and ChatGPT (its Codex limits), one row each: app icon, name, a bar of the 5-hour limit used, the time until it
 /// resets and the share used. Claude shows its Claude Code tokens instead while its limits are unknown.
+/// When only one of them has been used on this PC, its two rows are that one's 5-hour and weekly limits.
 /// A vertical dock has no room for rows and shows two small columns of the numbers only.
 /// </summary>
 public sealed class AiUsageWidget : IWidget
 {
     private IDisposable? _sub, _lease;
-    private Row _claude = null!, _codex = null!;
+    private Row _first = null!, _second = null!;
+    private WidgetContext _ctx = null!;
+    private readonly Border _host = new();
+    private AiServices _mode;
 
     /// <summary>The parts of one row that change; the bar and time are absent in the vertical layout.</summary>
     private sealed class Row
@@ -32,8 +36,29 @@ public sealed class AiUsageWidget : IWidget
 
     public FrameworkElement CreateView(WidgetContext ctx)
     {
+        _ctx = ctx;
+        // Checked here as well as in the tracker's pass, so the first view already has the right rows.
+        Build(Mode(AiUsageTracker.Detect()));
+        _lease ??= AiUsageTracker.Acquire();
+        _sub = ctx.Scheduler.Every(TimeSpan.FromMilliseconds(AppConstants.AiUsage.WidgetRefreshMs), () => AiUsageTracker.Shared.Refresh(), Apply);
+        return _host;
+    }
+
+    /// <summary>Exactly one tool used: that one. Both, or neither yet: a row for each.</summary>
+    private static AiServices Mode(AiServices found) => found is AiServices.Claude or AiServices.Codex ? found : AiServices.Both;
+
+    private static string NameOf(AiServices s) => s == AiServices.Codex ? "ChatGPT" : "Claude";
+    private static string AppIdOf(AiServices s) => s == AiServices.Codex ? AppConstants.AiUsage.CodexAppId : AppConstants.AiUsage.ClaudeAppId;
+
+    private void Build(AiServices mode)
+    {
+        _mode = mode;
+        var ctx = _ctx;
         double icon = ctx.Metrics.IconSize;
-        FrameworkElement view;
+        // Both: one row per tool. One tool: its 5-hour and weekly limits, both rows with its icon.
+        bool both = mode == AiServices.Both;
+        var first = both ? ("Claude", "Claude", AppConstants.AiUsage.ClaudeAppId) : ("5시간", NameOf(mode), AppIdOf(mode));
+        var second = both ? ("ChatGPT", "ChatGPT", AppConstants.AiUsage.CodexAppId) : ("주간", NameOf(mode), AppIdOf(mode));
         if (ctx.Metrics.Vertical)
         {
             var panel = new StackPanel
@@ -43,31 +68,28 @@ public sealed class AiUsageWidget : IWidget
                 Margin = new Thickness(0, icon * 0.14, 0, icon * 0.14),
                 IsHitTestVisible = false,
             };
-            _claude = Column(panel, ctx, "Claude", first: true);
-            _codex = Column(panel, ctx, "ChatGPT", first: false);
-            view = panel;
+            _first = Column(panel, ctx, first.Item1, first: true);
+            _second = Column(panel, ctx, second.Item1, first: false);
+            _host.Child = panel;
+            return;
         }
-        else
+        var grid = new Grid
         {
-            var grid = new Grid
-            {
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(icon * 0.2, 0, icon * 0.2, 0),
-                IsHitTestVisible = false,
-            };
-            for (int c = 0; c < 5; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            grid.RowDefinitions.Add(new RowDefinition());
-            grid.RowDefinitions.Add(new RowDefinition());
-            _claude = GridRow(grid, 0, ctx, "Claude", AppConstants.AiUsage.ClaudeAppId);
-            _codex = GridRow(grid, 1, ctx, "ChatGPT", AppConstants.AiUsage.CodexAppId);
-            view = grid;
-        }
-        _lease ??= AiUsageTracker.Acquire();
-        _sub = ctx.Scheduler.Every(TimeSpan.FromMilliseconds(AppConstants.AiUsage.WidgetRefreshMs), () => AiUsageTracker.Shared.Refresh(), Apply);
-        return view;
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(icon * 0.2, 0, icon * 0.2, 0),
+            IsHitTestVisible = false,
+        };
+        for (int c = 0; c < 5; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition());
+        grid.RowDefinitions.Add(new RowDefinition());
+        _first = GridRow(grid, 0, ctx, first.Item1, first.Item2, first.Item3);
+        _second = GridRow(grid, 1, ctx, second.Item1, second.Item2, second.Item3);
+        _host.Child = grid;
     }
 
-    private static Row GridRow(Grid grid, int row, WidgetContext ctx, string name, string appId)
+    /// <param name="caption">The row's text: the tool's name, or 5시간/주간 when the widget shows one tool.</param>
+    /// <param name="name">The tool, for the letter shown while its app icon is missing.</param>
+    private static Row GridRow(Grid grid, int row, WidgetContext ctx, string caption, string name, string appId)
     {
         double icon = ctx.Metrics.IconSize;
         var fg = new SolidColorBrush(ctx.Look.Foreground);
@@ -89,7 +111,7 @@ public sealed class AiUsageWidget : IWidget
         Place(grid, badgeHost, row, 0);
 
         var label = MetricView.Text(fg, text, FontWeights.SemiBold, 1);
-        label.Text = name;
+        label.Text = caption;
         label.VerticalAlignment = VerticalAlignment.Center;
         label.Margin = new Thickness(gap, top, gap, 0);
         Place(grid, label, row, 1);
@@ -167,8 +189,23 @@ public sealed class AiUsageWidget : IWidget
     private void Apply()
     {
         var s = AiUsageTracker.Shared.Snapshot;
-        Show(_claude, s.ClaudeSession, AiUsageFormat.Tokens(s.ClaudeTokensSession));
-        Show(_codex, s.CodexSession, "–");
+        // Someone starts using the other tool (or stops): switch layouts in place; the dock follows the size.
+        if (Mode(s.Services) != _mode) Build(Mode(s.Services));
+        switch (_mode)
+        {
+            case AiServices.Claude:
+                Show(_first, s.ClaudeSession, AiUsageFormat.Tokens(s.ClaudeTokensSession));
+                Show(_second, s.ClaudeWeek, "–");
+                break;
+            case AiServices.Codex:
+                Show(_first, s.CodexSession, "–");
+                Show(_second, s.CodexWeek, "–");
+                break;
+            default:
+                Show(_first, s.ClaudeSession, AiUsageFormat.Tokens(s.ClaudeTokensSession));
+                Show(_second, s.CodexSession, "–");
+                break;
+        }
     }
 
     private static void Show(Row row, LimitWindow? window, string unknown)
@@ -183,16 +220,21 @@ public sealed class AiUsageWidget : IWidget
 
     // A click opens the full usage flyout (AppHost.ToggleWidgetFlyout), which the dock wires up.
 
-    public IEnumerable<(string Header, Action Action)> MenuItems =>
-    [
-        ("지금 새로 고침", RefreshNow),
-        ("Claude 사용량 페이지 열기", () => AppLauncher.Execute(AppConstants.AiUsage.ClaudeUsagePage, null, null, null)),
-        ("ChatGPT 사용량 페이지 열기", () => AppLauncher.Execute(AppConstants.AiUsage.CodexUsagePage, null, null, null)),
-    ];
+    public IEnumerable<(string Header, Action Action)> MenuItems
+    {
+        get
+        {
+            yield return ("지금 새로 고침", RefreshNow);
+            if (_mode.HasFlag(AiServices.Claude))
+                yield return ("Claude 사용량 페이지 열기", () => AppLauncher.Execute(AppConstants.AiUsage.ClaudeUsagePage, null, null, null));
+            if (_mode.HasFlag(AiServices.Codex))
+                yield return ("ChatGPT 사용량 페이지 열기", () => AppLauncher.Execute(AppConstants.AiUsage.CodexUsagePage, null, null, null));
+        }
+    }
 
     private void RefreshNow()
     {
-        var dispatcher = _claude.Value.Dispatcher;
+        var dispatcher = _host.Dispatcher;
         Task.Run(() =>
         {
             AiUsageTracker.Shared.Refresh(force: true);

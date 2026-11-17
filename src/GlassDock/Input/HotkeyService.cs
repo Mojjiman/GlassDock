@@ -124,6 +124,14 @@ public sealed class HotkeyService : IDisposable
     {
         var silentKeys = new HashSet<int>();
         foreach (var (index, combos) in wanted) Register(index, combos, silentKeys);
+        // Injected keys cannot reach an elevated foreground window (UIPI drops them without an error), so
+        // with the game in front every key looked silent: four rounds of waiting froze startup for a second
+        // and moved working shortcuts onto worse keys. Keep the first choices; the next apply checks again.
+        if (IsProcessElevated(GetWindowProcessId(GetForegroundWindow())) == true)
+        {
+            Log.Info("An elevated window is in front; shortcut keys are kept without the arrival check");
+            return;
+        }
         for (int round = 0; round < AppConstants.Input.ProbeRounds; round++)
         {
             var silent = Probe(wanted.Select(w => w.Index).Where(i => !_direct[i]));

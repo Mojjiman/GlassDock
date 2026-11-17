@@ -109,6 +109,7 @@ public sealed class DockWindow : Window
         PreviewMouseLeftButtonDown += OnPreviewMouseDown;
         PreviewMouseMove += OnPreviewMouseMove;
         PreviewMouseLeftButtonUp += OnPreviewMouseUp;
+        PreviewMouseLeftButtonUp += EndLauncherHold;
         // Alt+Tab, a flyout or a lock screen can steal the capture mid-drag; put everything back.
         _root.LostMouseCapture += (_, _) => { CancelDrag(); EndMove(); CancelTileDrag(); };
         DragOver += OnDragOver;
@@ -402,7 +403,7 @@ public sealed class DockWindow : Window
         _outline.BorderThickness = new Thickness(0.8);
         _outline.BorderBrush = new SolidColorBrush(_look.RimDark);
 
-        if (_occlusion != null) _occlusion.Enabled = LensWanted;
+        if (_occlusion != null) _occlusion.Enabled = LensWanted && !_hiddenForFullscreen;
     }
 
     private bool LensWanted => _look.UseLens && _lens.IsSupported;
@@ -524,7 +525,7 @@ public sealed class DockWindow : Window
     {
         if (_maximized == null || _hwnd == 0) return;
         var s = _host.Settings.Current;
-        _maximized.Enabled = s.Dock.FillMaximizedBand && s.Dock.ReserveSpace && !s.AutoHide.Enabled;
+        _maximized.Enabled = s.Dock.FillMaximizedBand && s.Dock.ReserveSpace && !s.AutoHide.Enabled && !_hiddenForFullscreen;
         bool show = _maximized.AnyMaximized && !Hidden;
         if (!show) { _band?.SetVisible(false); return; }
         _band ??= new GlassBackdropWindow();
@@ -565,6 +566,10 @@ public sealed class DockWindow : Window
         _hiddenForFullscreen = hidden;
         Log.Info(hidden ? "Fullscreen app detected; hiding dock" : "Fullscreen ended; showing dock");
         ShowWindow(_hwnd, Hidden ? SW_HIDE : SW_SHOWNA);
+        // Both watchers hook every window event on the desktop, delivered through our UI thread; a game moves
+        // its cursor and child objects constantly, and nothing they find matters while the dock is hidden.
+        // Turning them back on checks at once, so the glass is right when the dock reappears.
+        if (_occlusion != null) _occlusion.Enabled = LensWanted && !hidden;
         if (_sensor != null) UpdateSensor(_display.Bounds);
         UpdateGlassBounds();
     }
@@ -655,8 +660,24 @@ public sealed class DockWindow : Window
     private int _dragOrigin, _dragTarget;
     private double _dragSlot, _dragDx;
 
+    /// <summary>A press on the dock closed Start; the dock stays shown over a fullscreen game until the release.</summary>
+    public bool HoldingForLauncher { get; private set; }
+
+    private void EndLauncherHold(object sender, MouseButtonEventArgs e)
+    {
+        if (!HoldingForLauncher) return;
+        HoldingForLauncher = false;
+        // After the click's handlers: a flyout they open keeps the dock shown on its own.
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, _host.Fullscreen.Recheck);
+    }
+
     private void OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
+        // Start or search open (Win, also over a game): close it on the press, not the click, so its
+        // ~200 ms fade-out overlaps the press instead of following it. The dock must not take the
+        // foreground here (that cancels the button's capture and the click is lost), so the game
+        // coming back is kept from hiding the dock until the release.
+        if (Input.ForegroundActivator.DismissLauncher()) HoldingForLauncher = true;
         _pressedButton = FindAncestor<AppButton>(e.OriginalSource as DependencyObject);
         _pressPoint = e.GetPosition(_root);
         _pressedTile = _pressedButton == null && FindAncestor<TileButton>(e.OriginalSource as DependencyObject) is { } tb && _specOf.ContainsKey(tb) ? tb : null;

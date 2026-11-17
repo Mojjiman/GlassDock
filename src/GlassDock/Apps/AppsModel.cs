@@ -305,14 +305,25 @@ public sealed class AppsModel
     public void Launch(AppItem item, bool elevated = false)
     {
         if (item.IsGroup) return; // its apps are started from the group flyout
-        bool ok = item.Pin != null ? AppLauncher.Launch(item.Pin, elevated) : AppLauncher.LaunchNew(item.Aumid, item.ExePath, elevated);
-        if (ok && !item.IsFolder) Bounce(item);
+        var pin = item.Pin;
+        string? aumid = item.Aumid, exe = item.ExePath;
+        LaunchBouncing(item.IsFolder ? null : item,
+            () => pin != null ? AppLauncher.Launch(pin, elevated) : AppLauncher.LaunchNew(aumid, exe, elevated));
     }
 
     /// <summary>Starts one app of a group; the group's dock icon bounces for it.</summary>
-    public void LaunchChild(AppItem group, PinnedItem child, bool elevated = false)
+    public void LaunchChild(AppItem group, PinnedItem child, bool elevated = false) =>
+        LaunchBouncing(group, () => AppLauncher.Launch(child, elevated));
+
+    /// <summary>
+    /// Bounces <paramref name="bouncing"/> at once, so the click is answered while the shell works,
+    /// and stops it again if the launch fails or is cancelled at the UAC prompt.
+    /// </summary>
+    private static async void LaunchBouncing(AppItem? bouncing, Func<bool> launch)
     {
-        if (AppLauncher.Launch(child, elevated)) Bounce(group);
+        if (bouncing != null) Bounce(bouncing);
+        // The launcher thread catches and logs every failure as false, so nothing escapes this async void.
+        if (!await AppLauncher.InBackground(launch) && bouncing != null) bouncing.IsLaunching = false;
     }
 
     /// <summary>Click on an app inside a group: start it, or bring its windows forward one by one.</summary>

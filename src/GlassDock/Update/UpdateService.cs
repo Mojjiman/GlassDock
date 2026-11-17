@@ -22,11 +22,8 @@ public sealed class UpdateService : IDisposable
 {
     public static Version Current { get; } = Trim(typeof(UpdateService).Assembly.GetName().Version ?? new Version(0, 0, 0));
 
-    /// <summary>
-    /// A single-file publish has no assembly path on disk. A Debug build runs GlassDock.dll through an
-    /// apphost, so swapping the exe would leave a mismatched pair; it can check but not install.
-    /// </summary>
-    public static bool CanInstall { get; } = string.IsNullOrEmpty(typeof(UpdateService).Assembly.Location);
+    /// <summary>A Debug build runs GlassDock.dll through an apphost, so swapping the exe would leave a mismatched pair; it can check but not install.</summary>
+    public static bool CanInstall => AppPaths.IsSingleFile;
 
     // After Current: static initializers run in order, and the User-Agent needs the version.
     private static readonly HttpClient Http = CreateClient();

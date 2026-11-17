@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Threading;
 using GlassDock.Apps;
 using GlassDock.Config;
 using GlassDock.Input;
@@ -38,6 +39,7 @@ public sealed class AppHost : IDisposable
     private ShellHostWindow? _host;
     private TaskbarHider? _hider;
     private ShellManager? _shell;
+    private TaskbarListRelay? _taskbarList;
     private HotkeyService? _hotkeys;
     private DockWindow? _dock;
     private FlyoutWindow? _flyout;
@@ -94,6 +96,7 @@ public sealed class AppHost : IDisposable
         config.EnableTrayService = true;
         config.AutoStartTrayService = true;
         _shell = new ShellManager(config);
+        _taskbarList = new TaskbarListRelay();
         Apps.Attach(_shell.Tasks);
 
         Fullscreen = new FullscreenMonitor(_shell.FullScreenHelper);
@@ -101,18 +104,27 @@ public sealed class AppHost : IDisposable
 
         _dock = new DockWindow(this);
         _dock.Initialize();
+        // Not the update offer: it stays open without the foreground and must give way to a game.
+        Fullscreen.HoldShown = () => _dock?.HoldingForLauncher == true || _flyout is { } and not UpdateFlyout;
 
         _hotkeys = new HotkeyService(_host.Handle, ShellHostWindow.MsgHotkeyDirect);
         _host.HotkeyHandler = _hotkeys.HandleHotkey;
         _host.DirectHotkeyHandler = _hotkeys.HandleDirect;
         _hotkeys.WinKeyChanged += down => _dock?.OnWinKey(down);
         _hotkeys.Command += OnHotkey;
-        _hotkeys.Apply(s.Shortcuts);
 
-        StartupRegistration.Apply(s.General.LaunchAtStartup);
         _applied = s.Clone();
         Settings.Changed += OnSettingsChanged;
-        StartWatchdog();
+        // After the dock's first frame: reading Explorer's hotkey table and checking our keys took 0.1 to over
+        // 1 s, and none of it is needed to see the dock. Until then Explorer still answers Win+number.
+        Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, () =>
+        {
+            if (_quitting) return;
+            var now = Settings.Current;
+            _hotkeys.Apply(now.Shortcuts);
+            StartupRegistration.Apply(now.General.LaunchAtStartup);
+            StartWatchdog();
+        });
         Updates = new UpdateService(() => Settings.Current.General.CheckForUpdates);
         Updates.Changed += () => Application.Current.Dispatcher.BeginInvoke(() => { _dock?.Rebuild(); OfferUpdate(); });
 
@@ -149,6 +161,8 @@ public sealed class AppHost : IDisposable
 
     private void OnTaskbarCreated()
     {
+        // ManagedShell's hook gets the same broadcast and takes ITaskbarList back; re-attach once it has.
+        Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () => _taskbarList?.Attach());
         // ManagedShell broadcasts TaskbarCreated itself; only a new real Shell_TrayWnd means Explorer restarted.
         var tray = ExplorerTaskbars.FindPrimary();
         if (tray == 0 || tray == _realTray) return;
@@ -160,6 +174,7 @@ public sealed class AppHost : IDisposable
             t.Stop();
             _hider?.OnExplorerRestarted();
             _dock?.OnExplorerRestarted();
+            _taskbarList?.Attach();
         };
         t.Start();
     }
@@ -215,6 +230,8 @@ public sealed class AppHost : IDisposable
     {
         if (PendingUpdate is not { } info || _offeredUpdate == info.Version || _dock == null || _quitting) return;
         if (Fullscreen.IsFullscreen || _flyout != null || IsMenuOpen) return; // tried again when those end
+        // Opening a flyout closes Start or search; only a click of the user's may do that.
+        if (Fullscreen.LauncherOpen) return;
         _offeredUpdate = info.Version;
         Log.Info($"Offering update {info.Version}");
         _dock.Reveal(Settings.Current.AutoHide.WinKeyLingerMs);
@@ -365,7 +382,12 @@ public sealed class AppHost : IDisposable
         _flyout?.SafeClose();
         _dock?.HideLabel();
         _flyout = f;
-        f.FlyoutClosed += () => { if (_flyout == f) _flyout = null; };
+        f.FlyoutClosed += () =>
+        {
+            if (_flyout != f) return;
+            _flyout = null;
+            Fullscreen?.Recheck();
+        };
         f.ShowAt(anchor);
     }
 
@@ -703,6 +725,9 @@ public sealed class AppHost : IDisposable
         Application.Current.Shutdown(AppConstants.ExitCodes.UserQuit);
     }
 
+    /// <summary>After an exception was survived: a half-built popup is the likeliest thing left broken.</summary>
+    public void RecoverFromFault() => _flyout?.SafeClose();
+
     public void Dispose()
     {
         _quitting = true;
@@ -714,6 +739,8 @@ public sealed class AppHost : IDisposable
         Apps.DisposeWatchers();
         Fullscreen?.Dispose();
         Updates?.Dispose();
+        // Before ManagedShell, which then hands ITaskbarList back to Explorer itself.
+        _taskbarList?.Dispose();
         // Dispose ManagedShell before restoring: its fake Shell_TrayWnd must be gone so Explorer's is found first.
         _shell?.Dispose();
         _hider?.Restore("quit");

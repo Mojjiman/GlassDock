@@ -18,8 +18,10 @@ if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 if (Test-Path $zip) { Remove-Item $zip -Force }
 
 # WPF cannot be trimmed. Its native DLLs go inside the exe (extracted on first run) so the folder holds one file.
+# ReadyToRun ships precompiled code, so a start does not wait for WPF to be JIT-compiled.
 & (Join-Path $DotnetRoot "dotnet.exe") publish $proj -c Release -r $Runtime --self-contained true `
     -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true `
+    -p:PublishReadyToRun=true `
     -p:DebugType=none -p:GenerateDocumentationFile=false -o $stage -v q -nologo
 if ($LASTEXITCODE -ne 0) { throw "Publish failed ($LASTEXITCODE)" }
 

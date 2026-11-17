@@ -11,6 +11,8 @@ public static class DockMain
 {
     private static AppHost? _host;
     private static int _crashed;
+    private static bool _running;
+    private static readonly Queue<long> UiFaultTimes = new();
 
     public static int Run(string[] args)
     {
@@ -37,8 +39,9 @@ public static class DockMain
 #pragma warning restore WPF0001
         app.DispatcherUnhandledException += (_, e) =>
         {
-            OnFatal(e.Exception, "Dispatcher");
             e.Handled = true;
+            if (_running && Survive(e.Exception)) return;
+            OnFatal(e.Exception, "Dispatcher");
             app.Shutdown(AppConstants.ExitCodes.Crash);
         };
         app.Startup += (_, _) =>
@@ -47,6 +50,7 @@ public static class DockMain
             {
                 _host = new AppHost();
                 _host.Start();
+                _running = true;
             }
             catch (Exception ex)
             {
@@ -64,6 +68,23 @@ public static class DockMain
         Log.Info($"Exit code {code}");
         Log.Flush(TimeSpan.FromSeconds(2));
         return code;
+    }
+
+    /// <summary>
+    /// An exception from a click handler, a timer or a widget once the dock is running: log it and carry on.
+    /// Restarting for each one brought the Windows taskbar back over a game (seven times on one day).
+    /// </summary>
+    /// <returns>False when too many came too fast; the caller then takes the crash path.</returns>
+    private static bool Survive(Exception ex)
+    {
+        long now = Environment.TickCount64;
+        while (UiFaultTimes.Count > 0 && now - UiFaultTimes.Peek() > AppConstants.UiFaults.WindowSeconds * 1000L) UiFaultTimes.Dequeue();
+        UiFaultTimes.Enqueue(now);
+        if (UiFaultTimes.Count > AppConstants.UiFaults.MaxSurvived) return false;
+        Log.Error($"Unhandled exception on the UI thread; carrying on ({UiFaultTimes.Count} of {AppConstants.UiFaults.MaxSurvived} in {AppConstants.UiFaults.WindowSeconds} s)", ex);
+        try { _host?.RecoverFromFault(); }
+        catch (Exception recoverEx) { Log.Error("Recovering from the exception failed", recoverEx); return false; }
+        return true;
     }
 
     /// <summary>Last line of defence: log and put the taskbar back before the process goes away.</summary>

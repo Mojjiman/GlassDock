@@ -14,7 +14,12 @@ public static class StartupRegistration
         try
         {
             using var key = Registry.CurrentUser.CreateSubKey(RunKey);
-            if (enabled)
+            if (enabled && !AppPaths.IsSingleFile)
+            {
+                // Starting a dev build must not point sign-in at it: it would fail there without DOTNET_ROOT.
+                Log.Info($"Dev build; leaving launch-at-startup as {key.GetValue(AppConstants.AppName) ?? "(none)"}");
+            }
+            else if (enabled)
             {
                 var value = $"\"{AppPaths.ExePath}\"";
                 if (key.GetValue(AppConstants.AppName) as string != value) key.SetValue(AppConstants.AppName, value);
