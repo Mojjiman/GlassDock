@@ -1,0 +1,59 @@
+name: 문제 신고
+description: 도크가 이상하게 움직이거나, 꺼지거나, 뭔가 안 될 때
+title: "[문제] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        신고해 주셔서 고마워요. 아래 칸을 아는 만큼만 채워 주세요.
+
+        ⚠️ **이 저장소는 공개라서 여기 쓴 글은 누구나 볼 수 있어요.**
+        설정 → 고급 → **문제 보고 파일 만들기**로 만든 zip에는 PC 사용자 이름이 들어간 경로와 실행 중인 앱 이름이 들어 있어요.
+        그 zip은 **여기에 올리지 말고** 개발자에게 개인 메시지로 보내 주세요.
+  - type: textarea
+    id: what
+    attributes:
+      label: 무슨 일이 있었나요?
+      description: 보이는 그대로 적어 주세요. 스크린샷이 있으면 끌어다 놓으면 돼요.
+      placeholder: 예) 게임 중에 도크 아이콘을 눌렀는데 게임 창이 앞으로 안 와요.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 어떻게 하면 또 생기나요?
+      description: 순서대로 적어 주시면 고치기 훨씬 쉬워요. 모르면 비워 두세요.
+      placeholder: |
+        1. 게임을 전체 화면으로 켜고
+        2. 윈도우 키를 누른 뒤
+        3. 도크의 폴더 아이콘을 누르면
+  - type: dropdown
+    id: often
+    attributes:
+      label: 얼마나 자주 생기나요?
+      options:
+        - 매번
+        - 가끔
+        - 한 번만 봤어요
+  - type: input
+    id: version
+    attributes:
+      label: GlassDock 버전
+      description: 설정 → 일반 → 업데이트, 또는 설정 → 고급 맨 아래에 나와요.
+      placeholder: 예) 0.1.2
+    validations:
+      required: true
+  - type: dropdown
+    id: game
+    attributes:
+      label: 그때 게임이나 전체 화면 앱을 켜고 있었나요?
+      options:
+        - 아니요
+        - 네 (아래에 게임 이름을 적어 주세요)
+        - 잘 모르겠어요
+  - type: textarea
+    id: more
+    attributes:
+      label: 더 알려 줄 것
+      description: 게임 이름, 같이 켜 둔 프로그램, Windows 버전 등 생각나는 것

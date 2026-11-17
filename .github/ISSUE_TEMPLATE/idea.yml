@@ -1,0 +1,17 @@
+name: 이런 게 있으면 좋겠어요
+description: 새 기능이나 바꾸면 좋을 점
+title: "[제안] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: 어떤 게 있으면 좋겠나요?
+      placeholder: 예) 두 번째 모니터에도 도크가 있으면 좋겠어요.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: 왜 필요한가요?
+      description: 어떤 때 불편한지 알려 주시면 더 잘 만들 수 있어요.

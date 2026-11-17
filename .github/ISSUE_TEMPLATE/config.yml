@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 최신 버전 받기
+    url: https://github.com/Mojjiman/GlassDock/releases/latest
+    about: 신고하기 전에 최신 버전에서도 생기는지 확인해 주세요.
