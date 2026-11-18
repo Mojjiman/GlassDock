@@ -6,7 +6,7 @@ namespace GlassDock.Config;
 /// <summary>User settings persisted to %APPDATA%\GlassDock\settings.json (schema in docs/design.md §10).</summary>
 public sealed class DockSettings
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
     public GeneralSettings General { get; set; } = new();
@@ -191,5 +191,8 @@ public sealed class TileSpec
         new() { Id = "t-qs", Type = "quickSettings" },
         new() { Id = "t-clock", Type = "clock" },
         new() { Id = "t-notif", Type = "notifications" },
+        new() { Id = ShowDesktopId, Type = "showDesktop" },
     ];
+
+    public const string ShowDesktopId = "t-desk";
 }

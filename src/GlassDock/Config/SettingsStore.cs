@@ -74,8 +74,14 @@ public sealed class SettingsStore : IDisposable
             // Nobody chose that value, so reset it to the new default.
             s.Shortcuts.SuspendHookInFullscreen = false;
         }
-        if (s.SchemaVersion < DockSettings.CurrentSchemaVersion) s.SchemaVersion = DockSettings.CurrentSchemaVersion;
         s.Tiles ??= TileSpec.Defaults();
+        if (s.SchemaVersion < 3 && !s.Tiles.Any(t => t.Type == "showDesktop"))
+        {
+            // Show desktop became a default tile, where Windows keeps it: at the far right. A disabled entry means
+            // the user hid it, so only a list without one gets it.
+            s.Tiles.Add(new TileSpec { Id = TileSpec.ShowDesktopId, Type = "showDesktop" });
+        }
+        if (s.SchemaVersion < DockSettings.CurrentSchemaVersion) s.SchemaVersion = DockSettings.CurrentSchemaVersion;
         s.Apps.Items ??= [];
     }
 
