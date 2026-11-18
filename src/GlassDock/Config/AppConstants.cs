@@ -224,6 +224,13 @@ public static class AppConstants
         public const byte GhostOutlineAlpha = 0xC0;
     }
 
+    public static class Startup
+    {
+        /// <summary>Started at sign-in: how long to wait for Explorer's taskbar before starting anyway.</summary>
+        public const int ExplorerWaitMs = 60_000;
+        public const int ExplorerPollMs = 250;
+    }
+
     /// <summary>Self-update from the public release repository (docs/design.md, "Updates").</summary>
     public static class Update
     {
@@ -319,6 +326,9 @@ public static class AppConstants
         /// <summary>The usage endpoint rate-limits third-party callers; other tools poll it about this often.</summary>
         public const int ClaudeLimitsPollMs = 5 * 60 * 1000;
         public const int ClaudeLimitsBackoffMaxMs = 60 * 60 * 1000;
+        /// <summary>How often an expired Claude login may be refreshed through <c>claude auth status</c>, and how long that may take.</summary>
+        public const int ClaudeLoginRefreshRetryMs = 30 * 60 * 1000;
+        public const int ClaudeCliTimeoutMs = 30000;
         public const int HttpTimeoutMs = 10000;
         /// <summary>
         /// Undocumented endpoint that Claude Code's /usage and community tools (CodexBar, Claude Usage Tray)

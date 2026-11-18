@@ -19,6 +19,14 @@ public static class DockMain
         Log.Initialize("main");
         Update.UpdateService.WaitForPreviousInstance(args);
         using var mutex = new Mutex(true, AppConstants.SingleInstanceMutex, out bool first);
+        bool atLogon = args.Contains(Shell.StartupRegistration.AtLogonArg);
+        if (!first && atLogon)
+        {
+            // Already running (started by hand before the Run value fired): a sign-in start must not open settings.
+            Log.Info("Already running; logon start ignored");
+            Log.Flush(TimeSpan.FromSeconds(1));
+            return AppConstants.ExitCodes.AlreadyRunning;
+        }
         if (!first)
         {
             // Second launch: ask the running dock to open its settings, then leave.
@@ -29,6 +37,7 @@ public static class DockMain
         }
 
         Log.Info($"Starting GlassDock {typeof(DockMain).Assembly.GetName().Version} (args: {string.Join(' ', args)})");
+        if (atLogon) WaitForExplorerTaskbar();
         TaskbarRestorer.RecoverIfStale();
         Update.UpdateService.CleanUpAfterUpdate();
 
@@ -85,6 +94,25 @@ public static class DockMain
         try { _host?.RecoverFromFault(); }
         catch (Exception recoverEx) { Log.Error("Recovering from the exception failed", recoverEx); return false; }
         return true;
+    }
+
+    /// <summary>
+    /// The Run value can fire before Explorer has made its taskbar, and hiding it, the journal's original
+    /// appbar state and ITaskbarList routing all need it there.
+    /// </summary>
+    private static void WaitForExplorerTaskbar()
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (ExplorerTaskbars.FindPrimary() == 0)
+        {
+            if (clock.ElapsedMilliseconds > AppConstants.Startup.ExplorerWaitMs)
+            {
+                Log.Warn("Explorer's taskbar did not appear; starting anyway");
+                return;
+            }
+            Thread.Sleep(AppConstants.Startup.ExplorerPollMs);
+        }
+        Log.Info($"Explorer's taskbar found after {clock.ElapsedMilliseconds} ms");
     }
 
     /// <summary>Last line of defence: log and put the taskbar back before the process goes away.</summary>

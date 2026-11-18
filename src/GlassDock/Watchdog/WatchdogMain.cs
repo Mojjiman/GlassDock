@@ -41,7 +41,13 @@ public static class WatchdogMain
         if (journal != null && !journal.IsOwnerAlive())
             TaskbarRestorer.Restore(journal, $"dock exited with code {code}");
 
-        if (code != AppConstants.ExitCodes.UserQuit && code != AppConstants.ExitCodes.AlreadyRunning)
+        if (GetSystemMetrics(SM_SHUTTINGDOWN) != 0)
+        {
+            // Windows closes the dock while signing out or shutting down (exit code 0x40010004); relaunching
+            // then only starts a dock that is killed a moment later.
+            Log.Info("Session is ending; not relaunching");
+        }
+        else if (code != AppConstants.ExitCodes.UserQuit && code != AppConstants.ExitCodes.AlreadyRunning)
         {
             if (CrashLoop.ShouldRestart())
             {
