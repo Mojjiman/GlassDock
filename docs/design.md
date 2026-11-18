@@ -811,7 +811,8 @@ Pressing empty glass (no tile under the pointer, dock not locked) captures the p
     { "id": "t-sp",    "type": "spacer" },
     { "id": "t-tray",  "type": "tray" },
     { "id": "t-clock", "type": "clock", "settings": { "hour12": false, "showSeconds": false, "showDate": true } },
-    { "id": "t-notif", "type": "notifications" }
+    { "id": "t-notif", "type": "notifications" },
+    { "id": "t-desk",  "type": "showDesktop" }
   ],
   "diagnostics": { "logLevel": "info" }
 }
