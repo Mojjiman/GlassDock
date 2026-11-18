@@ -264,7 +264,7 @@ public sealed class AppsModel
         if (pin.IconPath is { Length: > 0 } icon && File.Exists(icon)) return IconProvider.IconResource(icon, pin.IconIndex);
         if (AppIdentity.IsRealAumid(pin.Aumid)) return @"shell:AppsFolder\" + pin.Aumid;
         // Asking for the .lnk itself would add the shortcut-arrow overlay; use the target.
-        if (!string.IsNullOrEmpty(pin.Target) && File.Exists(pin.Target)) return pin.Target;
+        if (!string.IsNullOrEmpty(pin.Target) && AppIdentity.CurrentSquirrelPath(pin.Target) is var target && File.Exists(target)) return target;
         if (pin.Shortcut != null) return Path.Combine(AppPaths.Root, pin.Shortcut);
         return null;
     }

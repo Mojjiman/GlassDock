@@ -1,4 +1,6 @@
+using System.Text.RegularExpressions;
 using GlassDock.Config;
+using GlassDock.Logging;
 
 namespace GlassDock.Apps;
 
@@ -11,6 +13,42 @@ public static class AppIdentity
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
             return path.ToLowerInvariant();
+        }
+    }
+
+    // Squirrel installs (Discord, Slack) run from <root>\app-<version>\, a folder that changes with every update,
+    // so a pin made before the update named a folder the running app no longer comes from.
+    private static readonly Regex SquirrelVersionDir = new(@"\\app-\d+(\.\d+)*\\", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    /// <summary><see cref="NormalizePath"/> with a Squirrel version folder made version-free, for telling apps apart.</summary>
+    public static string IdentityPath(string path) => SquirrelVersionDir.Replace(NormalizePath(path), @"\app-*\", 1);
+
+    /// <summary>
+    /// The same file in the newest <c>app-&lt;version&gt;</c> folder that has it, for a path inside a Squirrel
+    /// install; any other path unchanged. A pin keeps the version it was made with, which the app's updater
+    /// leaves outdated and later deletes.
+    /// </summary>
+    public static string CurrentSquirrelPath(string path)
+    {
+        var m = SquirrelVersionDir.Match(path);
+        if (!m.Success) return path;
+        string root = path[..m.Index], rest = path[(m.Index + m.Length)..];
+        try
+        {
+            string? best = null;
+            Version? bestVersion = null;
+            foreach (var dir in Directory.EnumerateDirectories(root, "app-*"))
+            {
+                if (!Version.TryParse(Path.GetFileName(dir)[4..], out var v) || (bestVersion != null && v <= bestVersion)) continue;
+                var candidate = Path.Combine(dir, rest);
+                if (File.Exists(candidate)) { best = candidate; bestVersion = v; }
+            }
+            return best ?? path;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Debug($"Could not look for a newer Squirrel version of {path}: {ex.Message}");
+            return path;
         }
     }
 
@@ -39,13 +77,13 @@ public static class AppIdentity
     {
         aumid = EffectiveAumid(aumid, exePath);
         return IsRealAumid(aumid) ? "aumid:" + aumid!.ToLowerInvariant()
-            : !string.IsNullOrEmpty(exePath) ? "path:" + NormalizePath(exePath)
+            : !string.IsNullOrEmpty(exePath) ? "path:" + IdentityPath(exePath)
             : "unknown";
     }
 
     public static string KeyForPin(PinnedItem pin) =>
         PinAumid(pin) is { } aumid ? "aumid:" + aumid.ToLowerInvariant()
-        : !string.IsNullOrEmpty(pin.Target) ? "path:" + NormalizePath(pin.Target)
+        : !string.IsNullOrEmpty(pin.Target) ? "path:" + IdentityPath(pin.Target)
         : "pin:" + pin.Id;
 
     /// <summary>Does this running window belong to the pinned app?</summary>
@@ -58,7 +96,7 @@ public static class AppIdentity
         if (string.IsNullOrEmpty(exePath) || string.IsNullOrEmpty(pin.Target)) return false;
 
         var exe = NormalizePath(exePath);
-        if (NormalizePath(pin.Target) == exe) return true;
+        if (IdentityPath(pin.Target) == IdentityPath(exePath)) return true;
 
         // Squirrel/Electron installers pin "Update.exe --processStart App.exe"; the real process
         // lives in a versioned folder below Update.exe's directory.

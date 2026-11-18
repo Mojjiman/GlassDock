@@ -40,7 +40,10 @@ public sealed class TrayFlyout : FlyoutWindow
     private void Build()
     {
         _grid.Children.Clear();
-        foreach (var icon in _area.TrayIcons.Where(i => !i.IsHidden).ToList())
+        // An app that is killed without removing its icon (Discord restarting for an update, say) leaves the
+        // icon behind. Explorer drops such icons on hover; ManagedShell only once a click is sent to the dead
+        // window, so that click does nothing while the live icon looks the same.
+        foreach (var icon in _area.TrayIcons.Where(i => !i.IsHidden && IsWindow(i.HWnd)).ToList())
             _grid.Children.Add(CreateCell(icon));
         if (_grid.Children.Count == 0)
             _grid.Children.Add(new TextBlock { Text = "표시할 아이콘이 없습니다.", Margin = new Thickness(6), Opacity = 0.7 });

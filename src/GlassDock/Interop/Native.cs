@@ -276,6 +276,7 @@ public static unsafe class Native
     [DllImport("user32.dll")]
     public static extern int GetSystemMetrics(int index);
 
+    public const int SM_SHUTTINGDOWN = 0x2000;
     public const int SM_XVIRTUALSCREEN = 76, SM_YVIRTUALSCREEN = 77, SM_CXVIRTUALSCREEN = 78, SM_CYVIRTUALSCREEN = 79;
     public const int SPI_SETDESKWALLPAPER = 0x0014;
 

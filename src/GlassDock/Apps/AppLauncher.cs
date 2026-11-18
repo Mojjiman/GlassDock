@@ -52,7 +52,16 @@ public static class AppLauncher
             if (File.Exists(lnk)) return Execute(lnk, null, null, elevated ? "runas" : null);
             Log.Warn($"Pinned shortcut missing: {lnk}; falling back to target");
         }
-        if (pin.Target != null) return Execute(pin.Target, pin.Arguments, pin.WorkingDir, elevated ? "runas" : null);
+        if (pin.Target != null)
+        {
+            var target = AppIdentity.CurrentSquirrelPath(pin.Target);
+            var workingDir = pin.WorkingDir;
+            // The old version's folder as working directory would be outdated too, or gone.
+            if (target != pin.Target && workingDir != null
+                && string.Equals(Path.TrimEndingDirectorySeparator(workingDir), Path.GetDirectoryName(pin.Target), StringComparison.OrdinalIgnoreCase))
+                workingDir = Path.GetDirectoryName(target);
+            return Execute(target, pin.Arguments, workingDir, elevated ? "runas" : null);
+        }
         if (AppIdentity.IsRealAumid(pin.Aumid)) return Execute(@"shell:AppsFolder\" + pin.Aumid, null, null, null);
         Log.Warn($"Pin {pin.Id} has nothing to launch");
         return false;

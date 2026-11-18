@@ -8,6 +8,8 @@ namespace GlassDock.Shell;
 public static class StartupRegistration
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    /// <summary>Passed by the Run value; the dock then waits for Explorer's taskbar before it starts.</summary>
+    public const string AtLogonArg = "--at-logon";
 
     public static void Apply(bool enabled)
     {
@@ -21,7 +23,7 @@ public static class StartupRegistration
             }
             else if (enabled)
             {
-                var value = $"\"{AppPaths.ExePath}\"";
+                var value = $"\"{AppPaths.ExePath}\" {AtLogonArg}";
                 if (key.GetValue(AppConstants.AppName) as string != value) key.SetValue(AppConstants.AppName, value);
             }
             else if (key.GetValue(AppConstants.AppName) != null)

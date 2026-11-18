@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Net;
@@ -31,7 +32,8 @@ public enum AiServices { None = 0, Claude = 1, Codex = 2, Both = Claude | Codex 
 /// Reads AI usage for every AI widget tile (one shared instance, since tiles are rebuilt with the dock):
 /// <list type="bullet">
 /// <item>Claude plan limits from the OAuth usage endpoint, with the token Claude Code's CLI keeps in
-/// ~/.claude/.credentials.json (read only, never refreshed or written here).</item>
+/// ~/.claude/.credentials.json. GlassDock never writes that file: when the token has expired it runs
+/// <c>claude auth status</c>, and the CLI refreshes and saves its own login.</item>
 /// <item>Claude Code tokens from its transcripts (~/.claude/projects/**/*.jsonl), read incrementally.</item>
 /// <item>Codex plan limits from the rate_limits Codex writes into its session logs.</item>
 /// </list>
@@ -156,7 +158,11 @@ public sealed class AiUsageTracker
             if (!File.Exists(path)) { _claudeNote = "한도: 터미널에서 claude 로그인 필요"; return; }
             var written = File.GetLastWriteTimeUtc(path);
             // A rejected token stays rejected; wait until Claude Code writes new credentials.
-            if (_rejectedCredentials == written) return;
+            if (_rejectedCredentials == written)
+            {
+                if (RefreshLoginThroughCli(path)) _nextClaude = DateTime.UtcNow;
+                return;
+            }
             string? token = null;
             long expiresMs = 0;
             using (var doc = JsonDocument.Parse(File.ReadAllBytes(path)))
@@ -170,7 +176,9 @@ public sealed class AiUsageTracker
             if (string.IsNullOrEmpty(token)) { _claudeNote = "한도: 터미널에서 claude 로그인 필요"; return; }
             if (expiresMs > 0 && DateTimeOffset.FromUnixTimeMilliseconds(expiresMs) <= DateTimeOffset.UtcNow)
             {
-                _claudeNote = "한도: 로그인 만료, 터미널에서 claude를 한 번 실행하면 갱신";
+                // Someone who uses Claude only in the desktop app never runs the CLI, so its 8-hour token would stay expired.
+                if (RefreshLoginThroughCli(path)) _nextClaude = DateTime.UtcNow;
+                else _claudeNote = "한도: 로그인 만료, 터미널에서 claude를 한 번 실행하면 갱신";
                 return;
             }
 
@@ -191,6 +199,7 @@ public sealed class AiUsageTracker
                 _rejectedCredentials = written;
                 _claudeNote = "한도: 로그인 거부됨, 터미널에서 claude 다시 로그인";
                 Log.Warn($"Claude usage endpoint refused the stored login ({(int)response.StatusCode})");
+                if (RefreshLoginThroughCli(path)) _nextClaude = DateTime.UtcNow;
                 return;
             }
             response.EnsureSuccessStatusCode();
@@ -205,6 +214,73 @@ public sealed class AiUsageTracker
             _claudeFailures++;
             Log.Warn("Reading Claude plan limits failed", ex);
         }
+    }
+
+    private DateTime _nextLoginRefresh;
+
+    /// <summary>
+    /// Runs <c>claude auth status</c>, which refreshes an expired login and writes it back to the credentials
+    /// file. True if the file changed. Tried at most every <see cref="AppConstants.AiUsage.ClaudeLoginRefreshRetryMs"/>,
+    /// since a refresh token that is no longer valid keeps failing until the user signs in again.
+    /// </summary>
+    private bool RefreshLoginThroughCli(string credentials)
+    {
+        if (DateTime.UtcNow < _nextLoginRefresh) return false;
+        _nextLoginRefresh = DateTime.UtcNow.AddMilliseconds(AppConstants.AiUsage.ClaudeLoginRefreshRetryMs);
+        if (FindClaudeCli() is not { } cli)
+        {
+            Log.Info("Claude login has expired and no claude CLI was found to refresh it");
+            return false;
+        }
+        var before = File.GetLastWriteTimeUtc(credentials);
+        try
+        {
+            var info = new ProcessStartInfo(cli, "auth status")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            using var p = Process.Start(info) ?? throw new IOException("claude did not start");
+            p.StandardInput.Close();
+            // The output has the account's email and org: drained so the CLI cannot block on a full pipe, never logged.
+            _ = p.StandardOutput.ReadToEndAsync();
+            _ = p.StandardError.ReadToEndAsync();
+            if (!p.WaitForExit(AppConstants.AiUsage.ClaudeCliTimeoutMs))
+            {
+                p.Kill(entireProcessTree: true);
+                Log.Warn("claude auth status timed out");
+                return false;
+            }
+            bool refreshed = File.GetLastWriteTimeUtc(credentials) != before;
+            if (refreshed) Log.Info("Claude login refreshed through the CLI");
+            else Log.Warn($"claude auth status did not refresh the login (exit code {p.ExitCode})");
+            return refreshed;
+        }
+        catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            Log.Warn("Running claude auth status failed", ex);
+            return false;
+        }
+    }
+
+    /// <summary>The native installer's ~/.local/bin/claude.exe, else claude.exe or npm's claude.cmd on PATH.</summary>
+    private static string? FindClaudeCli()
+    {
+        var native = Path.Combine(Home, ".local", "bin", "claude.exe");
+        if (File.Exists(native)) return native;
+        var path = Environment.GetEnvironmentVariable("PATH") ?? "";
+        foreach (var dir in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            foreach (var name in new[] { "claude.exe", "claude.cmd" })
+            {
+                var candidate = Path.Combine(dir, name);
+                if (File.Exists(candidate)) return candidate;
+            }
+        }
+        return null;
     }
 
     private static LimitWindow? ParseClaudeWindow(JsonElement root, string name)
