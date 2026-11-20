@@ -18,10 +18,11 @@ if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 if (Test-Path $zip) { Remove-Item $zip -Force }
 
 # WPF cannot be trimmed. Its native DLLs go inside the exe (extracted on first run) so the folder holds one file.
-# ReadyToRun ships precompiled code, so a start does not wait for WPF to be JIT-compiled.
+# No compression and no ReadyToRun (measured 2026-11-20, 0.1.4): a compressed bundle inflates every assembly it
+# loads into private memory, in the dock and again in the watchdog (dock 269 -> 153 MB, watchdog 147 -> 7 MB).
+# ReadyToRun only added memory and download size with no measurable startup gain. The zip is smaller too (74 MB).
 & (Join-Path $DotnetRoot "dotnet.exe") publish $proj -c Release -r $Runtime --self-contained true `
-    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true `
-    -p:PublishReadyToRun=true `
+    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=false `
     -p:DebugType=none -p:GenerateDocumentationFile=false -o $stage -v q -nologo
 if ($LASTEXITCODE -ne 0) { throw "Publish failed ($LASTEXITCODE)" }
 
